@@ -11,7 +11,6 @@
         #qrcode { margin: 20px auto; display: flex; justify-content: center; }
         input[type="file"] { margin: 20px 0; width: 100%; }
         button { padding: 12px; background-color: #003d6b; color: white; border: none; cursor: pointer; border-radius: 8px; width: 100%; font-size: 16px; }
-        button:hover { background-color: #002a4d; }
         #status { margin-top: 20px; font-weight: bold; min-height: 40px; }
         hr { border: 0; border-top: 1px solid #eee; margin: 25px 0; }
     </style>
@@ -21,7 +20,7 @@
 <div class="card">
     <h2>สแกนเพื่อชำระเงิน</h2>
     <div id="qrcode"></div>
-    <p style="color: #666;">พร้อมเพย์: 0846690495</p>
+    <p>พร้อมเพย์: 0846690495</p>
 
     <hr>
 
@@ -32,7 +31,7 @@
 </div>
 
 <script>
-    // 1. ฟังก์ชันสร้าง PromptPay QR
+    // ฟังก์ชันสร้าง QR Code PromptPay
     function generatePromptPay(target, amount) {
         target = target.replace(/\D/g, ''); 
         let targetFormatted = target.length === 10 ? "0066" + target.substring(1) : target;
@@ -59,10 +58,10 @@
         return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
     }
 
-    // 2. ฟังก์ชันส่งตรวจสอบสลิป
+    // ฟังก์ชันหลักในการส่งสลิป
     async function uploadAndVerify() {
         const fileInput = document.getElementById('slipInput');
-        const statusDiv = document.getElementById('status'); // แก้ไขปัญหา ReferenceError
+        const statusDiv = document.getElementById('status'); // แก้ไข: ประกาศตัวแปรที่นี่
         const file = fileInput.files[0];
 
         if (!file) {
@@ -82,21 +81,14 @@
                 body: formData
             });
 
-            const contentType = response.headers.get("content-type");
-            if (response.ok && contentType && contentType.includes("application/json")) {
-                const result = await response.json();
-                if (result.success) {
-                    statusDiv.style.color = "green";
-                    statusDiv.innerHTML = `✅ สำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
-                } else {
-                    statusDiv.style.color = "red";
-                    statusDiv.innerText = `❌ ${result.message}`;
-                }
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                statusDiv.style.color = "green";
+                statusDiv.innerHTML = `✅ สำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
             } else {
-                const errorText = await response.text();
                 statusDiv.style.color = "red";
-                statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ขัดข้อง (404/500)";
-                console.error("Non-JSON response:", errorText);
+                statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
             }
         } catch (error) {
             statusDiv.style.color = "red";
@@ -104,7 +96,6 @@
         }
     }
 
-    // สร้าง QR เมื่อโหลดหน้าเว็บ
     window.onload = () => {
         const qrString = generatePromptPay("0846690495", 0);
         new QRCode(document.getElementById("qrcode"), {
