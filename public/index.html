@@ -1,3 +1,35 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบชำระเงินและตรวจสอบสลิป</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Tahoma', sans-serif; text-align: center; padding: 20px; background: #f4f7f6; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 400px; }
+        #qrcode { margin: 20px auto; display: flex; justify-content: center; }
+        input[type="file"] { margin: 20px 0; width: 100%; }
+        button { padding: 12px; background-color: #003d6b; color: white; border: none; cursor: pointer; border-radius: 8px; width: 100%; font-size: 16px; }
+        #status { margin-top: 20px; font-weight: bold; min-height: 40px; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 25px 0; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>สแกนเพื่อชำระเงิน</h2>
+    <div id="qrcode"></div>
+    <p>พร้อมเพย์: 0846690495</p>
+
+    <hr>
+
+    <h3>แจ้งโอนเงิน</h3>
+    <input type="file" id="slipInput" accept="image/*">
+    <button onclick="uploadAndVerify()">ยืนยันการโอนเงิน</button>
+    <div id="status"></div>
+</div>
+
 <script>
     async function uploadAndVerify() {
         const fileInput = document.getElementById('slipInput');
@@ -42,3 +74,6 @@
         }
     }
 </script>
+
+</body>
+</html>
