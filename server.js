@@ -3,36 +3,43 @@ const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
-const path = require('path'); // เพิ่มโมดูล path เพื่อจัดการเส้นทางไฟล์
+const path = require('path');
 
 const app = express();
+
+// --- 1. การตั้งค่าที่เก็บไฟล์ชั่วคราว ---
+// ตรวจสอบและสร้างโฟลเดอร์ uploads หากไม่มีอยู่จริง (สำคัญสำหรับการ Deploy)
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
 const upload = multer({ dest: 'uploads/' });
 
 // API Key สำหรับตรวจสอบสลิป
 const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
 
-// --- ส่วนที่แก้ไขเพิ่มเติมเพื่อให้รันหน้าเว็บได้ ---
-
-// 1. ตั้งค่าให้ Express ส่งไฟล์ Static (HTML, CSS, JS) จากโฟลเดอร์ public
+// --- 2. การจัดการไฟล์ Static ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 2. กำหนด Route หน้าแรกให้ส่งไฟล์ index.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- ส่วนของ API สำหรับตรวจสอบสลิป ---
-
+// --- 3. API สำหรับตรวจสอบสลิป ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
+    let filePath = ""; // เก็บตำแหน่งไฟล์เพื่อใช้ลบภายหลัง
+    
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: "กรุณาอัปโหลดไฟล์สลิป" });
         }
 
-        const filePath = req.file.path;
+        filePath = req.file.path;
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
+        // ส่งข้อมูลไปยัง SlipOK API
         const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
             headers: {
                 ...form.getHeaders(),
@@ -40,21 +47,35 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
             }
         });
 
-        // ลบไฟล์ชั่วคราวในโฟลเดอร์ uploads ทิ้งทันทีเพื่อประหยัดพื้นที่
+        // ลบไฟล์ทันทีหลังส่ง API สำเร็จ
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
 
-        res.json(response.data);
+        // ส่งผลลัพธ์กลับไป โดยปรับโครงสร้างให้หน้าเว็บอ่านง่าย
+        // ตรวจสอบว่า API ตอบกลับสำเร็จหรือไม่ (อ้างอิงตามโครงสร้าง SlipOK)
+        if (response.data && response.data.success !== false) {
+            res.json({ success: true, data: response.data.data });
+        } else {
+            res.json({ success: false, message: response.data.message || "สลิปไม่ถูกต้อง" });
+        }
+
     } catch (error) {
+        // หากเกิด Error ให้ลบไฟล์ที่ค้างอยู่ออกด้วย
+        if (filePath && fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
         console.error("API Error:", error.response ? error.response.data : error.message);
-        res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการเชื่อมต่อ API" });
+        res.status(500).json({ 
+            success: false, 
+            message: "เกิดข้อผิดพลาดในการเชื่อมต่อ API หรือสลิปไม่ถูกต้อง" 
+        });
     }
 });
 
-// --- ส่วนการตั้งค่า Port เพื่อรองรับ Render ---
-
-const PORT = process.env.PORT || 3000; // ใช้ค่าจาก Cloud หรือ 3000 สำหรับรันในเครื่อง
+// --- 4. การตั้งค่า Port ---
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
