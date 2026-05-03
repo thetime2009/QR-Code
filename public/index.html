@@ -2,94 +2,41 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<title>ตรวจสอบสลิป</title>
-
-<style>
-body {
-    font-family: Arial;
-    background: #f2f2f2;
-    display: flex;
-    justify-content: center;
-    margin-top: 50px;
-}
-.card {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    width: 350px;
-    text-align: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-}
-button {
-    margin-top: 15px;
-    padding: 10px;
-    width: 100%;
-    background: #0d3b66;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-#status {
-    margin-top: 15px;
-}
-</style>
+<title>Upload Slip</title>
 </head>
-
 <body>
 
-<div class="card">
-    <h2>สแกนเพื่อชำระเงิน</h2>
-    <p>พร้อมเพย์: 0846690495</p>
+<h2>อัปโหลดสลิป</h2>
 
-    <hr>
+<input type="file" id="file">
+<br><br>
 
-    <h3>แจ้งโอนเงิน</h3>
+<button onclick="uploadSlip()">ตรวจสอบ</button>
 
-    <input type="file" id="slipInput">
-    <button onclick="uploadAndVerify()">ยืนยันการโอนเงิน</button>
-
-    <div id="status"></div>
-</div>
+<pre id="result"></pre>
 
 <script>
-async function uploadAndVerify() {
-    const fileInput = document.getElementById('slipInput');
-    const statusDiv = document.getElementById('status');
+async function uploadSlip() {
+  const fileInput = document.getElementById("file");
+  const file = fileInput.files[0];
 
-    const file = fileInput.files[0];
+  if (!file) {
+    alert("กรุณาเลือกไฟล์");
+    return;
+  }
 
-    if (!file) {
-        alert("กรุณาเลือกไฟล์ก่อน");
-        return;
-    }
+  const formData = new FormData();
+  formData.append("slip", file); // 🔥 ต้องชื่อ slip ตรงกับ server
 
-    statusDiv.style.color = "blue";
-    statusDiv.innerText = "⏳ กำลังตรวจสอบ...";
+  const res = await fetch("https://qr-code-g7f3.onrender.com/verify-slip", {
+    method: "POST",
+    body: formData
+  });
 
-    const formData = new FormData();
-    formData.append('slip', file);
+  const data = await res.json();
 
-    try {
-        const response = await fetch('https://qr-code-g7f3.onrender.com/verify-slip', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            statusDiv.style.color = "green";
-            statusDiv.innerHTML = `✅ สำเร็จ ยอด: ${result.data.amount} บาท`;
-        } else {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
-        }
-
-    } catch (err) {
-        statusDiv.style.color = "red";
-        statusDiv.innerText = "⚠️ ติดต่อ server ไม่ได้";
-    }
+  document.getElementById("result").innerText =
+    JSON.stringify(data, null, 2);
 }
 </script>
 
