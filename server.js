@@ -12,7 +12,6 @@ app.use(express.json());
 const publicPath = path.join(__dirname, 'public');
 const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์ uploads อัตโนมัติหากไม่มี
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
@@ -20,54 +19,42 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: 'uploads/' });
 const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
 
-// --- 2. API สำหรับตรวจสอบสลิป ---
+// --- 2. API Routes (ต้องวางก่อน express.static) ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
     try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: "ไม่พบไฟล์สลิป" });
-        }
+        if (!req.file) return res.status(400).json({ success: false, message: "ไม่พบไฟล์สลิป" });
 
         filePath = req.file.path;
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        // ส่งข้อมูลไปที่ SlipOK API
         const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
-            headers: {
-                ...form.getHeaders(),
-                'x-authorization': SLIPOK_API_KEY
-            },
+            headers: { ...form.getHeaders(), 'x-authorization': SLIPOK_API_KEY },
             timeout: 10000
         });
 
-        // ลบไฟล์ชั่วคราวทิ้งทันที
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
         res.json(response.data);
 
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         const status = error.response ? error.response.status : 500;
-        const message = error.response ? (error.response.data.message || "API Error") : error.message;
-        res.status(status).json({ success: false, message: message });
+        res.status(status).json({ success: false, message: error.message });
     }
 });
 
-// --- 3. การจัดการไฟล์ Static และ Route หลัก ---
+// --- 3. Static Files ---
 app.use(express.static(publicPath));
 
 app.get('/', (req, res) => {
-    const indexPath = path.join(publicPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send("<h1>404 ไม่พบหน้าเว็บ</h1>");
-    }
+    res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// --- 4. การตั้งค่า Port ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 เซิร์ฟเวอร์ทำงานที่พอร์ต: ${PORT}`);
+// --- 4. Fallback สำหรับ 404 (เพื่อให้ตอบเป็น JSON เสมอ) ---
+app.use((req, res) => {
+    res.status(404).json({ success: false, message: "Endpoint not found" });
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
