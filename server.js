@@ -1,37 +1,49 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer'); // ต้องติดตั้งเพิ่ม: npm install multer
 
 const app = express();
+const upload = multer({ dest: 'uploads/' }); // โฟลเดอร์พักไฟล์ชั่วคราว
 
-// --- 1. ตั้งค่า Path ให้ตรงกับโครงสร้าง GitHub ของคุณ ---
-// __dirname จะชี้ไปที่โฟลเดอร์ราก (ที่มี server.js อยู่)
+// --- 1. การตั้งค่าพื้นฐาน ---
+app.use(express.json()); // รองรับการรับข้อมูลแบบ JSON
 const publicPath = path.join(__dirname, 'public');
 
-// ตรวจสอบใน Logs ของ Render ว่าหาโฟลเดอร์เจอไหม
-console.log(`📁 กำลังตรวจสอบโฟลเดอร์สาธารณะที่: ${publicPath}`);
-if (fs.existsSync(publicPath)) {
-    console.log("✅ พบโฟลเดอร์ 'public' เรียบร้อยแล้ว");
-} else {
-    console.error("❌ ไม่พบโฟลเดอร์ 'public' กรุณาตรวจสอบการตั้งค่า");
-}
+// --- 2. API สำหรับตรวจสอบสลิป (เพิ่มส่วนนี้) ---
+app.post('/verify-slip', upload.single('slip'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "ไม่พบไฟล์ที่อัปโหลด" });
+        }
 
-// --- 2. Middleware สำหรับ Static Files ---
-app.use(express.static(publicPath));
-
-// --- 3. Route หลัก ---
-app.get('/', (req, res) => {
-    const indexPath = path.join(publicPath, 'index.html');
-    
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send("<h1>404 ไม่พบหน้าเว็บ</h1><p>เซิร์ฟเวอร์หาไฟล์ index.html ไม่พบในโฟลเดอร์ public</p>");
+        // TODO: ใส่โค้ดเชื่อมต่อ API SlipOK ตรงนี้
+        
+        // ตัวอย่างการส่งผลลัพธ์กลับเป็น JSON ที่ถูกต้อง
+        res.json({ success: true, message: "ได้รับไฟล์เรียบร้อยแล้ว", fileName: req.file.filename });
+    } catch (error) {
+        // ส่ง Error กลับเป็น JSON เสมอเพื่อป้องกัน Unexpected token '<'
+        res.status(500).json({ success: false, message: error.message });
+    } finally {
+        // ลบไฟล์ชั่วคราวหลังใช้งาน (ถ้ามี)
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     }
 });
 
-// --- 4. การตั้งค่าพอร์ต ---
-// ใช้ 10000 สำหรับ Render หรือ 3000 สำหรับการทดสอบส่วนตัว
+// --- 3. Middleware สำหรับ Static Files ---
+app.use(express.static(publicPath));
+
+// --- 4. Route หลัก ---
+app.get('/', (req, res) => {
+    const indexPath = path.join(publicPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send("<h1>404 ไม่พบหน้าเว็บ</h1>");
+    }
+});
+
+// --- 5. การตั้งค่าพอร์ต ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 เซิร์ฟเวอร์ทำงานที่พอร์ต: ${PORT}`);
