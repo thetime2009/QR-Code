@@ -77,20 +77,7 @@ function calculateCRC16(data) {
  * ฟังก์ชันส่งสลิปไปตรวจสอบที่เซิร์ฟเวอร์หลังบ้าน
  */
 async function uploadAndVerify() {
-    const fileInput = document.getElementById('slipInput');
-    const statusDiv = document.getElementById('status');
-    const file = fileInput.files[0];
-
-    if (!file) {
-        alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
-        return;
-    }
-
-    statusDiv.style.color = "blue";
-    statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป โปรดรอสักครู่...";
-
-    const formData = new FormData();
-    formData.append('slip', file);
+    // ... โค้ดส่วนเตรียม FormData ...
 
     try {
         const response = await fetch('/verify-slip', {
@@ -98,23 +85,24 @@ async function uploadAndVerify() {
             body: formData
         });
 
-        // ตรวจสอบว่า HTTP Status OK หรือไม่ (เช่น 200, 400, 500)
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            statusDiv.style.color = "green";
-            // ดึงข้อมูลจำนวนเงินมาแสดง (รองรับโครงสร้าง SlipOK)
-            const amount = result.data ? result.data.amount : "ไม่ระบุ";
-            statusDiv.innerHTML = `✅ ยืนยันสำเร็จ!<br>ยอดเงินโอน: <strong>${amount}</strong> บาท`;
-            fileInput.value = ""; // ล้างค่าไฟล์ที่เลือกไว้
+        // ตรวจสอบว่า Content-Type เป็น JSON หรือไม่
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            const result = await response.json();
+            if (result.success) {
+                statusDiv.innerText = `✅ สำเร็จ: ${result.data.amount} บาท`;
+            } else {
+                statusDiv.innerText = `❌ ข้อผิดพลาด: ${result.message}`;
+            }
         } else {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = `❌ ตรวจสอบไม่สำเร็จ: ${result.message || 'ข้อมูลไม่ถูกต้อง'}`;
+            // หากไม่ใช่ JSON ให้ดึงข้อความออกมาเป็น Text แทนเพื่อดู Error
+            const errorText = await response.text();
+            console.error("Server returned non-JSON:", errorText);
+            statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ส่งข้อมูลผิดรูปแบบ (อาจเกิดจาก Path ผิด)";
         }
     } catch (error) {
-        console.error("Fetch Error:", error);
-        statusDiv.style.color = "red";
-        statusDiv.innerText = "⚠️ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่";
+        console.error("Error:", error);
+        statusDiv.innerText = "⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้";
     }
 }
 
