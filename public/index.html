@@ -35,46 +35,46 @@
 
 <script>
 /**
- * ฟังก์ชันสร้างค่า PromptPay ตามมาตรฐาน Thai QR Payment (EMVCo)
+ * ฟังก์ชันสร้างค่า PromptPay (EMVCo Standard)
+ * @param {string} target - เบอร์โทรศัพท์ 10 หลัก
+ * @param {number} amount - ยอดเงิน (ใส่ 0 หากไม่ระบุ)
  */
 function generatePromptPay(target, amount) {
-    // 1. ล้างค่าที่ไม่ใช่ตัวเลขออกให้หมด
+    // 1. ล้างค่าที่ไม่ใช่ตัวเลข
     target = target.replace(/\D/g, ''); 
     
-    // โครงสร้างพื้นฐาน
-    let payload = "000201010211";
+    // รูปแบบเบอร์โทรศัพท์สำหรับ PromptPay ต้องเป็น 00 + 66 + เบอร์ตัดเลข 0 ตัวหน้า
+    // หรือใช้เบอร์ 10 หลักตรงๆ ตามมาตรฐานบัญชีในไทย
+    let targetFormatted = target.length === 10 ? "0066" + target.substring(1) : target;
     
-    // 2. ข้อมูลผู้รับเงิน (ID 29)
-    // 00010: AID ของ PromptPay ไทยคือ A000000677010111
-    const aid = "0016A000000677010111";
+    // สร้างส่วนข้อมูลบัญชี (Tag 29)
+    const aid = "0016A000000677010111"; // AID สำหรับ PromptPay
+    const mobileTag = "01" + targetFormatted.length.toString().padStart(2, '0') + targetFormatted;
+    const merchantAccount = aid + mobileTag;
     
-    // 01: ประเภท (01 = เบอร์มือถือ, 02 = เลขบัตรประชาชน)
-    const type = target.length === 10 ? "01" : "02";
-    
-    // จัดรูปแบบเบอร์โทร: ต้องขึ้นต้นด้วย 0066 หรือ 0 และตามด้วยหมายเลข
-    // ในที่นี้เราจะใช้รูปแบบความยาวตัวเลขตรงๆ ตามมาตรฐาน
-    const accountInfo = type + target.length.toString().padStart(2, '0') + target;
-    
-    const merchantInfo = aid + accountInfo;
-    payload += "29" + merchantInfo.length.toString().padStart(2, '0') + merchantInfo;
-    
-    // 3. สกุลเงิน (53) = 764 (THB), ประเทศ (58) = TH
-    payload += "53037645802TH";
+    // ประกอบ Payload หลัก
+    let data = [
+        "000201", // Payload Format Indicator
+        "010211", // Point of Initiation Method (11 = Static, 12 = Dynamic)
+        "29" + merchantAccount.length.toString().padStart(2, '0') + merchantAccount,
+        "5303764", // Currency Code (764 = THB)
+        "5802TH"   // Country Code
+    ];
 
-    // 4. จำนวนเงิน (54)
+    // เพิ่มยอดเงิน (Tag 54)
     if (amount && amount > 0) {
         const amtStr = parseFloat(amount).toFixed(2);
-        payload += "54" + amtStr.length.toString().padStart(2, '0') + amtStr;
+        data.push("54" + amtStr.length.toString().padStart(2, '0') + amtStr);
     }
 
-    // 5. ปิดท้ายด้วย CRC16 (63)
-    payload += "6304";
-    
+    data.push("6304"); // Tag สำหรับ CRC
+
+    const payload = data.join('');
     return payload + calculateCRC16(payload);
 }
 
 /**
- * ฟังก์ชันคำนวณ CRC16 CCITT (XModem)
+ * ฟังก์ชันคำนวณ CRC16 CCITT (XModem) - มาตรฐานสากล
  */
 function calculateCRC16(data) {
     let crc = 0xFFFF;
@@ -83,25 +83,22 @@ function calculateCRC16(data) {
         x ^= x >> 4;
         crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF;
     }
-    return crc.toString(16).toUpperCase().padStart(4, '0');
+    return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
 
-// การเรียกใช้งานเมื่อหน้าเว็บโหลดเสร็จ
+// สั่งรันสร้าง QR Code
 window.onload = () => {
     const MY_ID = "0846690495"; 
-    const MY_AMOUNT = 0; // ใส่ 0 เพื่อให้ผู้โอนระบุยอดเงินเอง
+    const MY_AMOUNT = 0; 
     
-    const finalData = generatePromptPay(MY_ID, MY_AMOUNT);
-    console.log("Generated Payload:", finalData); // ตรวจสอบค่าที่ได้ใน Console
+    const qrString = generatePromptPay(MY_ID, MY_AMOUNT);
+    console.log("QR String:", qrString); // ตรวจสอบค่าใน Console
 
-    const qrcodeContainer = document.getElementById("qrcode");
-    qrcodeContainer.innerHTML = ""; // ล้างค่าเก่า
-
-    new QRCode(qrcodeContainer, {
-        text: finalData,
+    new QRCode(document.getElementById("qrcode"), {
+        text: qrString,
         width: 256,
         height: 256,
-        correctLevel: QRCode.CorrectLevel.L // ปรับระดับความปลอดภัยให้สแกนได้ง่ายที่สุด
+        correctLevel: QRCode.CorrectLevel.M
     });
 };
 </script>
