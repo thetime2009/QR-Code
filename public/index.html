@@ -35,40 +35,46 @@
 
 <script>
 /**
- * ฟังก์ชันสร้างค่า PromptPay ตามมาตรฐาน EMVCo
- * @param {string} target - เบอร์โทรศัพท์ (10 หลัก) หรือ เลขบัตร (13 หลัก)
- * @param {number} amount - จำนวนเงิน (เช่น 100.50)
+ * ฟังก์ชันสร้างค่า PromptPay ตามมาตรฐาน Thai QR Payment (EMVCo)
  */
 function generatePromptPay(target, amount) {
     // 1. ล้างค่าที่ไม่ใช่ตัวเลขออกให้หมด
     target = target.replace(/\D/g, ''); 
     
+    // โครงสร้างพื้นฐาน
     let payload = "000201010211";
     
-    // 2. ตรวจสอบประเภทเป้าหมาย (01 = เบอร์โทรศัพท์, 02 = เลขบัตร/E-Wallet)
+    // 2. ข้อมูลผู้รับเงิน (ID 29)
+    // 00010: AID ของ PromptPay ไทยคือ A000000677010111
+    const aid = "0016A000000677010111";
+    
+    // 01: ประเภท (01 = เบอร์มือถือ, 02 = เลขบัตรประชาชน)
     const type = target.length === 10 ? "01" : "02";
     
-    // 3. ประกอบ Merchant Account Information (ID 29)
-    const merchantInfo = "006601" + type + target.length.toString().padStart(2, '0') + target;
+    // จัดรูปแบบเบอร์โทร: ต้องขึ้นต้นด้วย 0066 หรือ 0 และตามด้วยหมายเลข
+    // ในที่นี้เราจะใช้รูปแบบความยาวตัวเลขตรงๆ ตามมาตรฐาน
+    const accountInfo = type + target.length.toString().padStart(2, '0') + target;
+    
+    const merchantInfo = aid + accountInfo;
     payload += "29" + merchantInfo.length.toString().padStart(2, '0') + merchantInfo;
     
-    // 4. สกุลเงินไทย (764) และประเทศ (TH)
+    // 3. สกุลเงิน (53) = 764 (THB), ประเทศ (58) = TH
     payload += "53037645802TH";
 
-    // 5. จัดรูปแบบจำนวนเงิน (ID 54) - ต้องมีทศนิยม 2 ตำแหน่ง
+    // 4. จำนวนเงิน (54)
     if (amount && amount > 0) {
         const amtStr = parseFloat(amount).toFixed(2);
         payload += "54" + amtStr.length.toString().padStart(2, '0') + amtStr;
     }
 
-    // 6. ส่วนปิดท้ายเพื่อรอการคำนวณ CRC16 (ID 63)
+    // 5. ปิดท้ายด้วย CRC16 (63)
     payload += "6304";
     
     return payload + calculateCRC16(payload);
 }
 
 /**
- * ฟังก์ชันคำนวณ CRC16 CCITT
+ * ฟังก์ชันคำนวณ CRC16 CCITT (XModem)
  */
 function calculateCRC16(data) {
     let crc = 0xFFFF;
@@ -77,25 +83,25 @@ function calculateCRC16(data) {
         x ^= x >> 4;
         crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF;
     }
-    // แปลงเป็นเลขฐาน 16 และเติม 0 ให้ครบ 4 หลัก
     return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// --- วิธีการเรียกใช้งานเพื่อให้สแกนติดแน่นอน ---
+// การเรียกใช้งานเมื่อหน้าเว็บโหลดเสร็จ
 window.onload = () => {
-    const MY_ID = "0846690495"; // **แก้ไขตรงนี้เป็นเบอร์ของคุณ**
-    const MY_AMOUNT = 0;       // ใส่ 0 ถ้าต้องการให้ผู้โอนใส่ยอดเอง
+    const MY_ID = "0846690495"; 
+    const MY_AMOUNT = 0; // ใส่ 0 เพื่อให้ผู้โอนระบุยอดเงินเอง
     
     const finalData = generatePromptPay(MY_ID, MY_AMOUNT);
-    
-    // ตรวจสอบค่าใน Console (กด F12 ใน Browser เพื่อดู)
-    console.log("PromptPay Data:", finalData);
+    console.log("Generated Payload:", finalData); // ตรวจสอบค่าที่ได้ใน Console
 
-    new QRCode(document.getElementById("qrcode"), {
+    const qrcodeContainer = document.getElementById("qrcode");
+    qrcodeContainer.innerHTML = ""; // ล้างค่าเก่า
+
+    new QRCode(qrcodeContainer, {
         text: finalData,
         width: 256,
         height: 256,
-        correctLevel: QRCode.CorrectLevel.M // ปรับระดับความละเอียดปานกลางเพื่อให้แอปสแกนง่าย
+        correctLevel: QRCode.CorrectLevel.L // ปรับระดับความปลอดภัยให้สแกนได้ง่ายที่สุด
     });
 };
 </script>
