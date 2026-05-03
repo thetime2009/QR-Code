@@ -71,7 +71,7 @@ async function uploadAndVerify() {
     formData.append('slip', file);
 
     try {
-        const response = await fetch('http://localhost:3000/verify-slip', {
+        const response = await fetch('/verify-slip', {
             method: 'POST',
             body: formData
         });
