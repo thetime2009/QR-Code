@@ -29,51 +29,41 @@
     <button onclick="uploadAndVerify()">ยืนยันการโอนเงิน</button>
     <div id="status"></div>
 </div>
+async function uploadAndVerify() {
+    const fileInput = document.getElementById('slipInput');
+    const statusDiv = document.getElementById('status'); // แก้ไขปัญหา ReferenceError
+    const file = fileInput.files[0];
 
-<script>
-    async function uploadAndVerify() {
-        const fileInput = document.getElementById('slipInput');
-        const statusDiv = document.getElementById('status'); // ประกาศให้ชัดเจน
-        const file = fileInput.files[0];
-
-        if (!file) {
-            alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
-            return;
-        }
-
-        statusDiv.style.color = "blue";
-        statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป...";
-
-        const formData = new FormData();
-        formData.append('slip', file);
-
-        try {
-            const response = await fetch('/verify-slip', {
-                method: 'POST',
-                body: formData
-            });
-
-            // ตรวจสอบว่าเป็น JSON หรือไม่
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                const result = await response.json();
-                if (result.success) {
-                    statusDiv.style.color = "green";
-                    statusDiv.innerHTML = `✅ ยืนยันสำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
-                } else {
-                    statusDiv.style.color = "red";
-                    statusDiv.innerText = `❌ ${result.message}`;
-                }
-            } else {
-                statusDiv.style.color = "red";
-                statusDiv.innerText = "⚠️ เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ";
-            }
-        } catch (error) {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = "⚠️ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้";
-        }
+    if (!file) {
+        alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
+        return;
     }
-</script>
+
+    statusDiv.style.color = "blue";
+    statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป...";
+
+    const formData = new FormData();
+    formData.append('slip', file); // ชื่อ 'slip' ต้องตรงกับใน server.js
+
+    try {
+        const response = await fetch('/verify-slip', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success) {
+            statusDiv.style.color = "green";
+            statusDiv.innerHTML = `✅ ยืนยันสำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
+        } else {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
+        }
+    } catch (error) {
+        statusDiv.style.color = "red";
+        statusDiv.innerText = "⚠️ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้";
+    }
+}
 
 </body>
 </html>
