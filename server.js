@@ -7,51 +7,82 @@ const path = require('path');
 
 const app = express();
 
-// --- 1. การตั้งค่าพื้นฐาน ---
+// ------------------ CONFIG ------------------
 app.use(express.json());
+
 const publicPath = path.join(__dirname, 'public');
 const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์ uploads อัตโนมัติ
+// สร้างโฟลเดอร์ uploads
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
+    fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const upload = multer({ dest: 'uploads/' });
-const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
+// multer ใช้ path เดียวกัน
+const upload = multer({ dest: uploadDir });
 
-// --- 2. API Routes (ต้องวางไว้ก่อน express.static เพื่อป้องกัน 404) ---
+// ❗ ใช้ env จะปลอดภัยกว่า
+const SLIPOK_API_KEY = process.env.SLIPOK_API_KEY || 'PUT_YOUR_KEY_HERE';
+
+// ------------------ API ------------------
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
+
     try {
-        if (!req.file) return res.status(400).json({ success: false, message: "ไม่พบไฟล์สลิป" });
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "ไม่พบไฟล์สลิป"
+            });
+        }
 
         filePath = req.file.path;
+
         const form = new FormData();
-        form.append('files', fs.createReadStream(filePath));
+        // ❗ สำคัญ: ใช้ file ไม่ใช่ files
+        form.append('file', fs.createReadStream(filePath));
 
-        const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
-            headers: { ...form.getHeaders(), 'x-authorization': SLIPOK_API_KEY },
-            timeout: 10000
-        });
+        const response = await axios.post(
+            'https://api.slipok.com/api/v1/main/log/upload',
+            form,
+            {
+                headers: {
+                    ...form.getHeaders(),
+                    'x-authorization': SLIPOK_API_KEY
+                },
+                timeout: 20000
+            }
+        );
 
+        // ลบไฟล์
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        res.json(response.data);
+
+        return res.json(response.data);
 
     } catch (error) {
-        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        const status = error.response ? error.response.status : 500;
-        res.status(status).json({ success: false, message: error.message });
+        console.error("ERROR:", error.response?.data || error.message);
+
+        if (filePath && fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        return res.status(error.response?.status || 500).json({
+            success: false,
+            message: error.response?.data || error.message
+        });
     }
 });
 
-// --- 3. การจัดการไฟล์ Static ---
+// ------------------ STATIC ------------------
 app.use(express.static(publicPath));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// --- 4. การตั้งค่า Port ---
+// ------------------ START SERVER ------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+app.listen(PORT, () => {
+    console.log(`🚀 Server running: http://localhost:${PORT}`);
+});
