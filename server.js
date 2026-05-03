@@ -26,58 +26,64 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- แก้ไขส่วน API สำหรับตรวจสอบสลิปใน server.js ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
     
     try {
+        // 1. ตรวจสอบว่ามีไฟล์ส่งมาจริงไหม
         if (!req.file) {
-            return res.status(400).json({ success: false, message: "กรุณาอัปโหลดไฟล์สลิป" });
+            console.error("❌ No file uploaded in request.");
+            return res.status(400).json({ success: false, message: "ไม่พบไฟล์สลิป" });
         }
 
         filePath = req.file.path;
+        console.log(`📁 File received: ${req.file.filename}`);
+
+        // 2. เตรียมข้อมูลส่งให้ SlipOK
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        // เพิ่มการตั้งค่า timeout เพื่อความเสถียร
+        console.log("🚀 Sending request to SlipOK API...");
+        
         const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
             headers: {
                 ...form.getHeaders(),
                 'x-authorization': SLIPOK_API_KEY
             },
-            timeout: 10000 // รอไม่เกิน 10 วินาที
+            timeout: 10000 // กำหนดเวลาเผื่อ API ตอบช้า
         });
 
-        // ลบไฟล์ทันทีหลังใช้งาน
+        // 3. จัดการไฟล์เมื่อ API ตอบกลับมา (ไม่ว่าจะสำเร็จหรือล้มเหลว)
         if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
 
-        // ตรวจสอบโครงสร้างข้อมูลที่ได้รับจาก SlipOK
-        const apiData = response.data;
-
-        if (apiData.success) {
-            // กรณีตรวจสอบสำเร็จ
-            res.json({ success: true, data: apiData.data });
-        } else {
-            // กรณี API ตอบกลับว่าไม่สำเร็จ (เช่น สลิปซ้ำ หรือ รูปภาพไม่ใช่สลิป)
-            res.json({ 
-                success: false, 
-                message: apiData.message || "สลิปไม่ถูกต้อง หรือถูกใช้งานไปแล้ว" 
-            });
-        }
+        console.log("✅ API Response received:", response.data);
+        res.json(response.data);
 
     } catch (error) {
+        // ลบไฟล์ทิ้งหากเกิด Error เพื่อไม่ให้ไฟล์ค้างใน Server
         if (filePath && fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
 
-        // ดึงข้อความ Error ที่แท้จริงจาก Axios
-        let errorMessage = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
-        if (error.response && error.response.data) {
-            errorMessage = error.response.data.message || "API ปฏิเสธการเชื่อมต่อ";
-            console.error("SlipOK API Detail:", error.response.data);
+        // 4. วิเคราะห์สาเหตุ Error (หัวใจสำคัญของการแก้ Status 500)
+        let status = 500;
+        let errorMessage = "Internal Server Error";
+
+        if (error.response) {
+            // Error ที่มาจาก SlipOK (เช่น 401 Unauthorized, 400 Bad Request)
+            status = error.response.status;
+            errorMessage = error.response.data.message || "API Error";
+            console.error(`❌ SlipOK API Error (${status}):`, error.response.data);
+        } else if (error.request) {
+            // ส่งไปแล้วแต่ไม่มีการตอบกลับ (Network issue)
+            errorMessage = "No response from API server";
+            console.error("❌ Network Error: No response received.");
         } else {
-            console.error("Network/Server Error:", error.message);
+            // Error อื่นๆ เช่น โค้ดเขียนผิด
+            errorMessage = error.message;
+            console.error("❌ Server Script Error:", error.message);
         }
 
-        res.status(500).json({ success: false, message: errorMessage });
+        // ส่ง Error กลับไปที่ Frontend แบบสวยๆ ไม่ให้เป็น Status 500 เปล่าๆ
+        res.status(status).json({ success: false, message: errorMessage });
     }
 });
 
