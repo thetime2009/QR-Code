@@ -101,6 +101,68 @@ window.onload = () => {
         correctLevel: QRCode.CorrectLevel.M
     });
 };
+
+/**
+ * ฟังก์ชันส่งสลิปไปตรวจสอบที่เซิร์ฟเวอร์หลังบ้าน
+ */
+async function uploadAndVerify() {
+    const fileInput = document.getElementById('slipInput');
+    const statusDiv = document.getElementById('status');
+    const file = fileInput.files[0];
+
+    // 1. ตรวจสอบว่าเลือกไฟล์หรือยัง
+    if (!file) {
+        alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
+        return;
+    }
+
+    // 2. แสดงสถานะกำลังทำงาน
+    statusDiv.style.color = "blue";
+    statusDiv.innerText = "กำลังตรวจสอบสลิป โปรดรอสักครู่...";
+
+    // 3. เตรียมข้อมูลสำหรับส่งไฟล์
+    const formData = new FormData();
+    formData.append('slip', file);
+
+    try {
+        // 4. ส่งข้อมูลไปยัง Server (Node.js)
+        const response = await fetch('/verify-slip', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        // 5. จัดการผลลัพธ์ที่ตอบกลับมา
+        if (result.success) {
+            statusDiv.style.color = "green";
+            // แสดงข้อมูลยอดเงินที่ API ตรวจสอบเจอ
+            statusDiv.innerText = `✅ ยืนยันสำเร็จ! ยอดเงินโอน: ${result.data.amount} บาท`;
+        } else {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = `❌ ตรวจสอบไม่สำเร็จ: ${result.message}`;
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        statusDiv.style.color = "red";
+        statusDiv.innerText = "⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+    }
+}
+
+// สั่งรันสร้าง QR Code (เหมือนเดิม)
+window.onload = () => {
+    const MY_ID = "0846690495"; 
+    const MY_AMOUNT = 0; 
+    
+    const qrString = generatePromptPay(MY_ID, MY_AMOUNT);
+    new QRCode(document.getElementById("qrcode"), {
+        text: qrString,
+        width: 256,
+        height: 256,
+        correctLevel: QRCode.CorrectLevel.M
+    });
+};
+    
 </script>
 
 </body>
