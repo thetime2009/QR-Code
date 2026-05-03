@@ -7,24 +7,24 @@ const path = require('path');
 
 const app = express();
 
-// ------------------ CONFIG ------------------
+// ---------- CONFIG ----------
 app.use(express.json());
 
 const publicPath = path.join(__dirname, 'public');
 const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์ uploads
+// สร้างโฟลเดอร์ uploads อัตโนมัติ
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// multer ใช้ path เดียวกัน
+// multer
 const upload = multer({ dest: uploadDir });
 
-// ❗ ใช้ env จะปลอดภัยกว่า
-const SLIPOK_API_KEY = process.env.SLIPOK_API_KEY || 'PUT_YOUR_KEY_HERE';
+// 🔐 ใส่ API KEY ของคุณ
+const SLIPOK_API_KEY = 'PUT_YOUR_KEY_HERE';
 
-// ------------------ API ------------------
+// ---------- API ----------
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
 
@@ -39,8 +39,7 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
         filePath = req.file.path;
 
         const form = new FormData();
-        // ❗ สำคัญ: ใช้ file ไม่ใช่ files
-        form.append('file', fs.createReadStream(filePath));
+        form.append('file', fs.createReadStream(filePath)); // สำคัญ: file
 
         const response = await axios.post(
             'https://api.slipok.com/api/v1/main/log/upload',
@@ -54,10 +53,9 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
             }
         );
 
-        // ลบไฟล์
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-        return res.json(response.data);
+        res.json(response.data);
 
     } catch (error) {
         console.error("ERROR:", error.response?.data || error.message);
@@ -66,23 +64,22 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
             fs.unlinkSync(filePath);
         }
 
-        return res.status(error.response?.status || 500).json({
+        res.status(error.response?.status || 500).json({
             success: false,
             message: error.response?.data || error.message
         });
     }
 });
 
-// ------------------ STATIC ------------------
+// ---------- STATIC ----------
 app.use(express.static(publicPath));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// ------------------ START SERVER ------------------
-const PORT = process.env.PORT || 3000;
-
+// ---------- START ----------
+const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Server running: http://localhost:${PORT}`);
 });
