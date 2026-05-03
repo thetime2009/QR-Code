@@ -4,27 +4,27 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
 
-// ---------- CONFIG ----------
+// -------- CONFIG --------
 app.use(express.json());
+app.use(cors());
 
 const publicPath = path.join(__dirname, 'public');
 const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์ uploads อัตโนมัติ
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// multer
 const upload = multer({ dest: uploadDir });
 
 // 🔐 ใส่ API KEY ของคุณ
-const SLIPOK_API_KEY = 'PUT_YOUR_KEY_HERE';
+const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
 
-// ---------- API ----------
+// -------- API --------
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
 
@@ -32,17 +32,18 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({
                 success: false,
-                message: "ไม่พบไฟล์สลิป"
+                message: "ไม่พบไฟล์"
             });
         }
 
         filePath = req.file.path;
 
         const form = new FormData();
-        form.append('file', fs.createReadStream(filePath)); // สำคัญ: file
+        // ✅ ใช้ files (สำคัญมาก)
+        form.append('files', fs.createReadStream(filePath));
 
         const response = await axios.post(
-            'https://api.slipok.com/api/v1/main/log/upload',
+            'https://api.slipok.com/api/v1/slip/verify',
             form,
             {
                 headers: {
@@ -71,15 +72,15 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     }
 });
 
-// ---------- STATIC ----------
+// -------- STATIC --------
 app.use(express.static(publicPath));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// ---------- START ----------
-const PORT = 3000;
+// -------- START --------
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server running: http://localhost:${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
