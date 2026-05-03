@@ -26,9 +26,9 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- 3. API สำหรับตรวจสอบสลิป ---
+// --- แก้ไขส่วน API สำหรับตรวจสอบสลิปใน server.js ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
-    let filePath = ""; // เก็บตำแหน่งไฟล์เพื่อใช้ลบภายหลัง
+    let filePath = "";
     
     try {
         if (!req.file) {
@@ -39,38 +39,45 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        // ส่งข้อมูลไปยัง SlipOK API
+        // เพิ่มการตั้งค่า timeout เพื่อความเสถียร
         const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
             headers: {
                 ...form.getHeaders(),
                 'x-authorization': SLIPOK_API_KEY
-            }
+            },
+            timeout: 10000 // รอไม่เกิน 10 วินาที
         });
 
-        // ลบไฟล์ทันทีหลังส่ง API สำเร็จ
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
+        // ลบไฟล์ทันทีหลังใช้งาน
+        if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
 
-        // ส่งผลลัพธ์กลับไป โดยปรับโครงสร้างให้หน้าเว็บอ่านง่าย
-        // ตรวจสอบว่า API ตอบกลับสำเร็จหรือไม่ (อ้างอิงตามโครงสร้าง SlipOK)
-        if (response.data && response.data.success !== false) {
-            res.json({ success: true, data: response.data.data });
+        // ตรวจสอบโครงสร้างข้อมูลที่ได้รับจาก SlipOK
+        const apiData = response.data;
+
+        if (apiData.success) {
+            // กรณีตรวจสอบสำเร็จ
+            res.json({ success: true, data: apiData.data });
         } else {
-            res.json({ success: false, message: response.data.message || "สลิปไม่ถูกต้อง" });
+            // กรณี API ตอบกลับว่าไม่สำเร็จ (เช่น สลิปซ้ำ หรือ รูปภาพไม่ใช่สลิป)
+            res.json({ 
+                success: false, 
+                message: apiData.message || "สลิปไม่ถูกต้อง หรือถูกใช้งานไปแล้ว" 
+            });
         }
 
     } catch (error) {
-        // หากเกิด Error ให้ลบไฟล์ที่ค้างอยู่ออกด้วย
-        if (filePath && fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        if (filePath && fs.existsSync(filePath)) { fs.unlinkSync(filePath); }
+
+        // ดึงข้อความ Error ที่แท้จริงจาก Axios
+        let errorMessage = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        if (error.response && error.response.data) {
+            errorMessage = error.response.data.message || "API ปฏิเสธการเชื่อมต่อ";
+            console.error("SlipOK API Detail:", error.response.data);
+        } else {
+            console.error("Network/Server Error:", error.message);
         }
 
-        console.error("API Error:", error.response ? error.response.data : error.message);
-        res.status(500).json({ 
-            success: false, 
-            message: "เกิดข้อผิดพลาดในการเชื่อมต่อ API หรือสลิปไม่ถูกต้อง" 
-        });
+        res.status(500).json({ success: false, message: errorMessage });
     }
 });
 
