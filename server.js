@@ -7,21 +7,20 @@ const path = require('path');
 
 const app = express();
 
-// --- 1. การจัดการ Path และ Middleware ---
+// --- 1. การตั้งค่าพื้นฐาน ---
 app.use(express.json());
-// ใช้ path.resolve เพื่อความแม่นยำสูงสุดบนระบบ Linux ของ Render
-const publicPath = path.resolve(__dirname, 'public');
-const uploadDir = path.resolve(__dirname, 'uploads');
+const publicPath = path.join(__dirname, 'public');
+const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์พักไฟล์ชั่วคราว
+// สร้างโฟลเดอร์ uploads อัตโนมัติ
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.mkdirSync(uploadDir);
 }
 
 const upload = multer({ dest: 'uploads/' });
 const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
 
-// --- 2. API Route (POST) ---
+// --- 2. API Routes (ต้องวางไว้ก่อน express.static เพื่อป้องกัน 404) ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     let filePath = "";
     try {
@@ -38,6 +37,7 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
 
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         res.json(response.data);
+
     } catch (error) {
         if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
         const status = error.response ? error.response.status : 500;
@@ -45,10 +45,9 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     }
 });
 
-// --- 3. การจัดการ Static Files ---
+// --- 3. การจัดการไฟล์ Static ---
 app.use(express.static(publicPath));
 
-// ส่ง index.html สำหรับ Route หลัก
 app.get('/', (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
