@@ -1,40 +1,57 @@
 const express = require('express');
-const path = require('path');
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
 const fs = require('fs');
-const multer = require('multer'); //
+const path = require('path');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' }); // สร้างโฟลเดอร์พักไฟล์
 
 // --- 1. การตั้งค่าพื้นฐาน ---
-app.use(express.json()); 
-const publicPath = path.join(__dirname, 'public'); //
+app.use(express.json());
+const publicPath = path.join(__dirname, 'public');
+const uploadDir = path.join(__dirname, 'uploads');
 
-// --- 2. API สำหรับรับการอัปโหลดสลิป (ส่วนที่ทำให้ปุ่มทำงานได้) ---
-app.post('/verify-slip', upload.single('slip'), async (req, res) => { //
+// สร้างโฟลเดอร์ uploads อัตโนมัติ
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+const upload = multer({ dest: 'uploads/' });
+const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd'; //
+
+// --- 2. API สำหรับตรวจสอบสลิป ---
+app.post('/verify-slip', upload.single('slip'), async (req, res) => {
+    let filePath = "";
     try {
         if (!req.file) {
-            return res.status(400).json({ success: false, message: "ไม่พบไฟล์ที่อัปโหลด" });
+            return res.status(400).json({ success: false, message: "ไม่พบไฟล์สลิป" });
         }
 
-        // ตรงนี้คือส่วนที่คุณจะนำข้อมูลไปเชื่อมต่อกับ SlipOK API ในอนาคต
-        console.log("ได้รับไฟล์แล้ว:", req.file.filename);
+        filePath = req.file.path;
+        const form = new FormData();
+        form.append('files', fs.createReadStream(filePath));
 
-        // ตอบกลับเพื่อให้หน้าบ้านรู้ว่าส่งสำเร็จ
-        res.json({ 
-            success: true, 
-            message: "เซิร์ฟเวอร์ได้รับไฟล์เรียบร้อยแล้ว",
-            data: { amount: 0 } // ค่าสมมติ
+        // ส่งข้อมูลไปที่ SlipOK
+        const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
+            headers: {
+                ...form.getHeaders(),
+                'x-authorization': SLIPOK_API_KEY
+            },
+            timeout: 10000
         });
 
+        // ลบไฟล์ชั่วคราว
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        // ส่งผลลัพธ์ JSON กลับไปที่หน้าบ้าน
+        res.json(response.data);
+
     } catch (error) {
-        // หากเกิด Error จะส่ง JSON กลับไป ไม่ใช่หน้าเว็บ HTML
-        res.status(500).json({ success: false, message: error.message });
-    } finally {
-        // ลบไฟล์ชั่วคราวออกจากเซิร์ฟเวอร์เพื่อประหยัดพื้นที่
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
+        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        const status = error.response ? error.response.status : 500;
+        const message = error.response ? (error.response.data.message || "API Error") : error.message;
+        res.status(status).json({ success: false, message: message });
     }
 });
 
@@ -46,12 +63,12 @@ app.get('/', (req, res) => {
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
-        res.status(404).send("ไม่พบไฟล์ index.html");
+        res.status(404).send("<h1>404 ไม่พบหน้าเว็บ</h1>");
     }
 });
 
-// --- 4. การตั้งค่าพอร์ต ---
-const PORT = process.env.PORT || 3000; //
+// --- 4. การตั้งค่า Port ---
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 เซิร์ฟเวอร์ทำงานที่พอร์ต: ${PORT}`);
+    console.log(`🚀 Server is running at http://localhost:${PORT}`);
 });
