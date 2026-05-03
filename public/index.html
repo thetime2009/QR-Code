@@ -29,41 +29,80 @@
     <button onclick="uploadAndVerify()">ยืนยันการโอนเงิน</button>
     <div id="status"></div>
 </div>
-async function uploadAndVerify() {
-    const fileInput = document.getElementById('slipInput');
-    const statusDiv = document.getElementById('status'); // แก้ไขปัญหา ReferenceError
-    const file = fileInput.files[0];
 
-    if (!file) {
-        alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
-        return;
-    }
-
-    statusDiv.style.color = "blue";
-    statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป...";
-
-    const formData = new FormData();
-    formData.append('slip', file); // ชื่อ 'slip' ต้องตรงกับใน server.js
-
-    try {
-        const response = await fetch('/verify-slip', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-        if (response.ok && result.success) {
-            statusDiv.style.color = "green";
-            statusDiv.innerHTML = `✅ ยืนยันสำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
-        } else {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
+<script>
+    // ฟังก์ชันสร้าง QR Code PromptPay
+    function generatePromptPay(target, amount) {
+        target = target.replace(/\D/g, ''); 
+        let targetFormatted = target.length === 10 ? "0066" + target.substring(1) : target;
+        const aid = "0016A000000677010111"; 
+        const mobileTag = "01" + targetFormatted.length.toString().padStart(2, '0') + targetFormatted;
+        const merchantAccount = aid + mobileTag;
+        let data = ["000201", "010211", "29" + merchantAccount.length.toString().padStart(2, '0') + merchantAccount, "5303764", "5802TH"];
+        if (amount > 0) {
+            const amtStr = parseFloat(amount).toFixed(2);
+            data.push("54" + amtStr.length.toString().padStart(2, '0') + amtStr);
         }
-    } catch (error) {
-        statusDiv.style.color = "red";
-        statusDiv.innerText = "⚠️ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้";
+        data.push("6304");
+        const payload = data.join('');
+        return payload + calculateCRC16(payload);
     }
-}
+
+    function calculateCRC16(data) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < data.length; i++) {
+            let x = ((crc >> 8) ^ data.charCodeAt(i)) & 0xFF;
+            x ^= x >> 4;
+            crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF;
+        }
+        return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    // ฟังก์ชันหลักในการส่งสลิป
+    async function uploadAndVerify() {
+        const fileInput = document.getElementById('slipInput');
+        const statusDiv = document.getElementById('status'); // แก้ไข: ประกาศตัวแปรที่นี่
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
+            return;
+        }
+
+        statusDiv.style.color = "blue";
+        statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป...";
+
+        const formData = new FormData();
+        formData.append('slip', file);
+
+        try {
+            const response = await fetch('/verify-slip', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                statusDiv.style.color = "green";
+                statusDiv.innerHTML = `✅ สำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
+            } else {
+                statusDiv.style.color = "red";
+                statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
+            }
+        } catch (error) {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = "⚠️ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้";
+        }
+    }
+
+    window.onload = () => {
+        const qrString = generatePromptPay("0846690495", 0);
+        new QRCode(document.getElementById("qrcode"), {
+            text: qrString, width: 200, height: 200
+        });
+    };
+</script>
 
 </body>
 </html>
