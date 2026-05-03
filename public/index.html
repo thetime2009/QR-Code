@@ -1,107 +1,96 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบชำระเงินและตรวจสอบสลิป</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <style>
-        body { font-family: 'Tahoma', sans-serif; text-align: center; padding: 20px; background: #f4f7f6; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 400px; }
-        #qrcode { margin: 20px auto; display: flex; justify-content: center; }
-        input[type="file"] { margin: 20px 0; width: 100%; }
-        button { padding: 12px; background-color: #003d6b; color: white; border: none; cursor: pointer; border-radius: 8px; width: 100%; font-size: 16px; }
-        #status { margin-top: 20px; font-weight: bold; min-height: 40px; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 25px 0; }
-    </style>
+<meta charset="UTF-8">
+<title>ตรวจสอบสลิป</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f2f2f2;
+    display: flex;
+    justify-content: center;
+    margin-top: 50px;
+}
+.card {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 350px;
+    text-align: center;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+button {
+    margin-top: 15px;
+    padding: 10px;
+    width: 100%;
+    background: #0d3b66;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#status {
+    margin-top: 15px;
+}
+</style>
 </head>
+
 <body>
 
 <div class="card">
     <h2>สแกนเพื่อชำระเงิน</h2>
-    <div id="qrcode"></div>
     <p>พร้อมเพย์: 0846690495</p>
 
     <hr>
 
     <h3>แจ้งโอนเงิน</h3>
-    <input type="file" id="slipInput" accept="image/*">
+
+    <input type="file" id="slipInput">
     <button onclick="uploadAndVerify()">ยืนยันการโอนเงิน</button>
+
     <div id="status"></div>
 </div>
 
 <script>
-    // ฟังก์ชันสร้าง QR Code PromptPay
-    function generatePromptPay(target, amount) {
-        target = target.replace(/\D/g, ''); 
-        let targetFormatted = target.length === 10 ? "0066" + target.substring(1) : target;
-        const aid = "0016A000000677010111"; 
-        const mobileTag = "01" + targetFormatted.length.toString().padStart(2, '0') + targetFormatted;
-        const merchantAccount = aid + mobileTag;
-        let data = ["000201", "010211", "29" + merchantAccount.length.toString().padStart(2, '0') + merchantAccount, "5303764", "5802TH"];
-        if (amount > 0) {
-            const amtStr = parseFloat(amount).toFixed(2);
-            data.push("54" + amtStr.length.toString().padStart(2, '0') + amtStr);
-        }
-        data.push("6304");
-        const payload = data.join('');
-        return payload + calculateCRC16(payload);
+async function uploadAndVerify() {
+    const fileInput = document.getElementById('slipInput');
+    const statusDiv = document.getElementById('status');
+
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("กรุณาเลือกไฟล์ก่อน");
+        return;
     }
 
-    function calculateCRC16(data) {
-        let crc = 0xFFFF;
-        for (let i = 0; i < data.length; i++) {
-            let x = ((crc >> 8) ^ data.charCodeAt(i)) & 0xFF;
-            x ^= x >> 4;
-            crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF;
-        }
-        return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-    }
+    statusDiv.style.color = "blue";
+    statusDiv.innerText = "⏳ กำลังตรวจสอบ...";
 
-    // ฟังก์ชันหลักในการส่งสลิป
-    async function uploadAndVerify() {
-        const fileInput = document.getElementById('slipInput');
-        const statusDiv = document.getElementById('status'); // แก้ไข: ประกาศตัวแปรที่นี่
-        const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('slip', file);
 
-        if (!file) {
-            alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
-            return;
-        }
-
-        statusDiv.style.color = "blue";
-        statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป...";
-
-        const formData = new FormData();
-        formData.append('slip', file);
-
-        try {
-            const response = await fetch('/verify-slip', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-                statusDiv.style.color = "green";
-                statusDiv.innerHTML = `✅ สำเร็จ! ยอดโอน: ${result.data.amount} บาท`;
-            } else {
-                statusDiv.style.color = "red";
-                statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
-            }
-        } catch (error) {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = "⚠️ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้";
-        }
-    }
-
-    window.onload = () => {
-        const qrString = generatePromptPay("0846690495", 0);
-        new QRCode(document.getElementById("qrcode"), {
-            text: qrString, width: 200, height: 200
+    try {
+        const response = await fetch('http://localhost:3000/verify-slip', {
+            method: 'POST',
+            body: formData
         });
-    };
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            statusDiv.style.color = "green";
+            statusDiv.innerHTML = `✅ สำเร็จ ยอด: ${result.data.amount} บาท`;
+        } else {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = `❌ ${result.message || 'ตรวจสอบไม่สำเร็จ'}`;
+        }
+
+    } catch (err) {
+        statusDiv.style.color = "red";
+        statusDiv.innerText = "⚠️ ติดต่อ server ไม่ได้";
+    }
+}
 </script>
 
 </body>
