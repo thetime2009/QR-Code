@@ -25,35 +25,35 @@
 
 <script>
 async function uploadAndVerify() {
-    const fileInput = document.getElementById('slipInput');
-    const statusDiv = document.getElementById('status');
-    
-    if (fileInput.files.length === 0) {
-        alert('โปรดเลือกไฟล์ก่อนครับ');
+    const fileInput = document.querySelector('input[type="file"]');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
         return;
     }
 
-    statusDiv.innerText = "กำลังตรวจสอบ...";
-    
+    // เตรียมข้อมูลเพื่อส่งไปยัง Server
     const formData = new FormData();
-    formData.append('slip', fileInput.files[0]);
+    formData.append('slip', file);
 
     try {
+        // ส่งข้อมูลไปยัง Endpoint ที่เราจะสร้างใน Node.js
         const response = await fetch('/verify-slip', {
             method: 'POST',
             body: formData
         });
+
         const result = await response.json();
 
         if (result.success) {
-            statusDiv.style.color = "green";
-            statusDiv.innerText = `ยืนยันสำเร็จ! ยอดเงิน: ${result.data.amount} บาท`;
+            alert(`ยืนยันสำเร็จ! ยอดเงินโอน: ${result.data.amount} บาท`);
         } else {
-            statusDiv.style.color = "red";
-            statusDiv.innerText = "ตรวจสอบไม่สำเร็จ: " + result.message;
+            alert(`ตรวจสอบไม่สำเร็จ: ${result.message}`);
         }
     } catch (error) {
-        statusDiv.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        console.error("Error:", error);
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
     }
 }
 </script>
