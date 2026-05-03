@@ -10,7 +10,7 @@ const path = require('path');
 const app = express();
 const upload = multer({ dest: 'uploads/' }); // เก็บไฟล์สลิปชั่วคราวที่นี่
 
-const API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
+const API_KEY = process.env.SLIP_API_KEY; // ดึงค่าจากระบบของ Server
 const API_URL = 'https://api.slipok.com/api/v1/main/log/upload'; // ตัวอย่าง URL ของ SlipOK
 
 app.use(express.static('public')); // ให้เรียกใช้ไฟล์หน้าเว็บจากโฟลเดอร์ public
