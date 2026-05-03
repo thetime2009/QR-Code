@@ -12,13 +12,13 @@ app.use(express.json());
 const publicPath = path.join(__dirname, 'public');
 const uploadDir = path.join(__dirname, 'uploads');
 
-// สร้างโฟลเดอร์ uploads อัตโนมัติ
+// สร้างโฟลเดอร์ uploads อัตโนมัติหากไม่มี
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
 const upload = multer({ dest: 'uploads/' });
-const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd'; //
+const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
 
 // --- 2. API สำหรับตรวจสอบสลิป ---
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
@@ -32,7 +32,7 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
         const form = new FormData();
         form.append('files', fs.createReadStream(filePath));
 
-        // ส่งข้อมูลไปที่ SlipOK
+        // ส่งข้อมูลไปที่ SlipOK API
         const response = await axios.post('https://api.slipok.com/api/v1/main/log/upload', form, {
             headers: {
                 ...form.getHeaders(),
@@ -41,10 +41,9 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
             timeout: 10000
         });
 
-        // ลบไฟล์ชั่วคราว
+        // ลบไฟล์ชั่วคราวทิ้งทันที
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-        // ส่งผลลัพธ์ JSON กลับไปที่หน้าบ้าน
         res.json(response.data);
 
     } catch (error) {
@@ -55,7 +54,7 @@ app.post('/verify-slip', upload.single('slip'), async (req, res) => {
     }
 });
 
-// --- 3. การจัดการไฟล์ Static ---
+// --- 3. การจัดการไฟล์ Static และ Route หลัก ---
 app.use(express.static(publicPath));
 
 app.get('/', (req, res) => {
@@ -70,5 +69,5 @@ app.get('/', (req, res) => {
 // --- 4. การตั้งค่า Port ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running at http://localhost:${PORT}`);
+    console.log(`🚀 เซิร์ฟเวอร์ทำงานที่พอร์ต: ${PORT}`);
 });
