@@ -36,46 +36,33 @@
 <script>
 /**
  * ฟังก์ชันสร้างค่า PromptPay (EMVCo Standard)
- * @param {string} target - เบอร์โทรศัพท์ 10 หลัก
- * @param {number} amount - ยอดเงิน (ใส่ 0 หากไม่ระบุ)
  */
 function generatePromptPay(target, amount) {
-    // 1. ล้างค่าที่ไม่ใช่ตัวเลข
     target = target.replace(/\D/g, ''); 
-    
-    // รูปแบบเบอร์โทรศัพท์สำหรับ PromptPay ต้องเป็น 00 + 66 + เบอร์ตัดเลข 0 ตัวหน้า
-    // หรือใช้เบอร์ 10 หลักตรงๆ ตามมาตรฐานบัญชีในไทย
     let targetFormatted = target.length === 10 ? "0066" + target.substring(1) : target;
     
-    // สร้างส่วนข้อมูลบัญชี (Tag 29)
-    const aid = "0016A000000677010111"; // AID สำหรับ PromptPay
+    const aid = "0016A000000677010111"; 
     const mobileTag = "01" + targetFormatted.length.toString().padStart(2, '0') + targetFormatted;
     const merchantAccount = aid + mobileTag;
     
-    // ประกอบ Payload หลัก
     let data = [
-        "000201", // Payload Format Indicator
-        "010211", // Point of Initiation Method (11 = Static, 12 = Dynamic)
+        "000201", 
+        "010211", 
         "29" + merchantAccount.length.toString().padStart(2, '0') + merchantAccount,
-        "5303764", // Currency Code (764 = THB)
-        "5802TH"   // Country Code
+        "5303764", 
+        "5802TH"
     ];
 
-    // เพิ่มยอดเงิน (Tag 54)
     if (amount && amount > 0) {
         const amtStr = parseFloat(amount).toFixed(2);
         data.push("54" + amtStr.length.toString().padStart(2, '0') + amtStr);
     }
 
-    data.push("6304"); // Tag สำหรับ CRC
-
+    data.push("6304"); 
     const payload = data.join('');
     return payload + calculateCRC16(payload);
 }
 
-/**
- * ฟังก์ชันคำนวณ CRC16 CCITT (XModem) - มาตรฐานสากล
- */
 function calculateCRC16(data) {
     let crc = 0xFFFF;
     for (let i = 0; i < data.length; i++) {
@@ -86,22 +73,6 @@ function calculateCRC16(data) {
     return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
 
-// สั่งรันสร้าง QR Code
-window.onload = () => {
-    const MY_ID = "0846690495"; 
-    const MY_AMOUNT = 0; 
-    
-    const qrString = generatePromptPay(MY_ID, MY_AMOUNT);
-    console.log("QR String:", qrString); // ตรวจสอบค่าใน Console
-
-    new QRCode(document.getElementById("qrcode"), {
-        text: qrString,
-        width: 256,
-        height: 256,
-        correctLevel: QRCode.CorrectLevel.M
-    });
-};
-
 /**
  * ฟังก์ชันส่งสลิปไปตรวจสอบที่เซิร์ฟเวอร์หลังบ้าน
  */
@@ -110,51 +81,50 @@ async function uploadAndVerify() {
     const statusDiv = document.getElementById('status');
     const file = fileInput.files[0];
 
-    // 1. ตรวจสอบว่าเลือกไฟล์หรือยัง
     if (!file) {
         alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
         return;
     }
 
-    // 2. แสดงสถานะกำลังทำงาน
     statusDiv.style.color = "blue";
-    statusDiv.innerText = "กำลังตรวจสอบสลิป โปรดรอสักครู่...";
+    statusDiv.innerText = "⏳ กำลังตรวจสอบสลิป โปรดรอสักครู่...";
 
-    // 3. เตรียมข้อมูลสำหรับส่งไฟล์
     const formData = new FormData();
     formData.append('slip', file);
 
     try {
-        // 4. ส่งข้อมูลไปยัง Server (Node.js)
         const response = await fetch('/verify-slip', {
             method: 'POST',
             body: formData
         });
 
+        // ตรวจสอบว่า HTTP Status OK หรือไม่ (เช่น 200, 400, 500)
         const result = await response.json();
 
-        // 5. จัดการผลลัพธ์ที่ตอบกลับมา
-        if (result.success) {
+        if (response.ok && result.success) {
             statusDiv.style.color = "green";
-            // แสดงข้อมูลยอดเงินที่ API ตรวจสอบเจอ
-            statusDiv.innerText = `✅ ยืนยันสำเร็จ! ยอดเงินโอน: ${result.data.amount} บาท`;
+            // ดึงข้อมูลจำนวนเงินมาแสดง (รองรับโครงสร้าง SlipOK)
+            const amount = result.data ? result.data.amount : "ไม่ระบุ";
+            statusDiv.innerHTML = `✅ ยืนยันสำเร็จ!<br>ยอดเงินโอน: <strong>${amount}</strong> บาท`;
+            fileInput.value = ""; // ล้างค่าไฟล์ที่เลือกไว้
         } else {
             statusDiv.style.color = "red";
-            statusDiv.innerText = `❌ ตรวจสอบไม่สำเร็จ: ${result.message}`;
+            statusDiv.innerText = `❌ ตรวจสอบไม่สำเร็จ: ${result.message || 'ข้อมูลไม่ถูกต้อง'}`;
         }
     } catch (error) {
-        console.error("Error:", error);
+        console.error("Fetch Error:", error);
         statusDiv.style.color = "red";
-        statusDiv.innerText = "⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        statusDiv.innerText = "⚠️ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่";
     }
 }
 
-// สั่งรันสร้าง QR Code (เหมือนเดิม)
+// รวมการเรียกใช้งานไว้ใน window.onload เดียวกัน
 window.onload = () => {
     const MY_ID = "0846690495"; 
     const MY_AMOUNT = 0; 
     
     const qrString = generatePromptPay(MY_ID, MY_AMOUNT);
+    
     new QRCode(document.getElementById("qrcode"), {
         text: qrString,
         width: 256,
@@ -162,7 +132,6 @@ window.onload = () => {
         correctLevel: QRCode.CorrectLevel.M
     });
 };
-    
 </script>
 
 </body>
