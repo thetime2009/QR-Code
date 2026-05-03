@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ระบบแจ้งโอนเงิน</title>
+    <style>
+        body { font-family: 'Tahoma', sans-serif; text-align: center; padding: 50px; background: #f4f7f6; }
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
+        input { margin: 20px 0; }
+        #status { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>แจ้งยืนยันการโอนเงิน</h2>
+    <p>กรุณาอัปโหลดสลิปเพื่อตรวจสอบยอด</p>
+    
+    <input type="file" id="slipInput" accept="image/*">
+    <br>
+    <button onclick="uploadAndVerify()" style="padding: 10px 20px; cursor: pointer;">ยืนยันการโอน</button>
+
+    <div id="status"></div>
+</div>
+
+<script>
+async function uploadAndVerify() {
+    const fileInput = document.getElementById('slipInput');
+    const statusDiv = document.getElementById('status');
+    
+    if (fileInput.files.length === 0) {
+        alert('โปรดเลือกไฟล์ก่อนครับ');
+        return;
+    }
+
+    statusDiv.innerText = "กำลังตรวจสอบ...";
+    
+    const formData = new FormData();
+    formData.append('slip', fileInput.files[0]);
+
+    try {
+        const response = await fetch('/verify-slip', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.color = "green";
+            statusDiv.innerText = `ยืนยันสำเร็จ! ยอดเงิน: ${result.data.amount} บาท`;
+        } else {
+            statusDiv.style.color = "red";
+            statusDiv.innerText = "ตรวจสอบไม่สำเร็จ: " + result.message;
+        }
+    } catch (error) {
+        statusDiv.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+    }
+}
+</script>
+
+</body>
+</html>
