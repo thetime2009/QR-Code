@@ -1,27 +1,27 @@
 <!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>QR Code & Slip Verify</title>
+    <title>PromptPay & Verify</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        #qr-display img { width: 250px; margin-top: 15px; }
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        img { width: 200px; margin: 20px; }
+        .success { color: green; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h2>ระบบชำระเงิน</h2>
-    <input type="number" id="amount" placeholder="ระบุจำนวนเงิน (บาท)">
+    <h1>ระบบจ่ายเงิน</h1>
+    <input type="number" id="amount" placeholder="ระบุจำนวนเงิน">
     <button onclick="getQR()">สร้าง QR Code</button>
     <div id="qr-display"></div>
 
     <hr>
-    <h3>ตรวจสอบสลิป</h3>
-    <input type="file" id="slipInput" accept="image/*">
-    <button onclick="verify()">ยืนยันการโอน</button>
-    <p id="result"></p>
+    <h3>ยืนยันการโอน</h3>
+    <input type="file" id="slipFile" accept="image/*">
+    <button onclick="verify()">ตรวจสอบสลิป</button>
+    <p id="status"></p>
 
     <script>
-        // ฟังก์ชันสร้าง QR
         async function getQR() {
             const amount = document.getElementById('amount').value;
             const res = await fetch('/generateQR', {
@@ -33,37 +33,30 @@
             document.getElementById('qr-display').innerHTML = `<img src="${data.qrImage}">`;
         }
 
-        // ฟังก์ชันตรวจสอบสลิป (แก้ ReferenceError)
         async function verify() {
-            const fileInput = document.getElementById('slipInput');
-            const resultDisplay = document.getElementById('result');
-            
-            if (fileInput.files.length === 0) {
-                alert('กรุณาเลือกไฟล์ภาพสลิป');
-                return;
-            }
+            const fileInput = document.getElementById('slipFile');
+            const status = document.getElementById('status');
+            if(!fileInput.files[0]) return alert('เลือกไฟล์ก่อนครับ');
 
             const formData = new FormData();
             formData.append('slip', fileInput.files[0]);
 
-            resultDisplay.innerText = "กำลังตรวจสอบ...";
-
+            status.innerText = "กำลังตรวจสอบ...";
+            
             try {
-                const res = await fetch('/verify-slip', {
+                const res = await fetch('/verify-slip', { // ชื่อต้องตรงกับใน server.js
                     method: 'POST',
                     body: formData
                 });
-                const data = await res.json();
+                const result = await res.json();
                 
-                if (data.success || data.data) {
-                    resultDisplay.style.color = "green";
-                    resultDisplay.innerText = "ตรวจสอบสำเร็จ! ยอดเงิน: " + (data.data.amount || "ถูกต้อง");
+                if(result.success) {
+                    status.innerHTML = `<span class="success">จ่ายเงินสำเร็จ! ยอดเงิน: ${result.data.amount.amount} บาท</span>`;
                 } else {
-                    resultDisplay.style.color = "red";
-                    resultDisplay.innerText = "สลิปไม่ถูกต้อง หรือมีการใช้ซ้ำ";
+                    status.innerText = "ตรวจสอบไม่ผ่าน: " + (result.message || "สลิปไม่ถูกต้อง");
                 }
-            } catch (err) {
-                resultDisplay.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+            } catch (e) {
+                status.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
             }
         }
     </script>
