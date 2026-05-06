@@ -1,86 +1,50 @@
 const express = require('express');
-const multer = require('multer');
+const generatePayload = require('promptpay-qr');
+const qrcode = require('qrcode');
 const axios = require('axios');
+const multer = require('multer');
 const FormData = require('form-data');
-const fs = require('fs');
 const path = require('path');
-const cors = require('cors');
 
 const app = express();
+const upload = multer({ storage: multer.memoryStorage() });
 
-// -------- CONFIG --------
 app.use(express.json());
-app.use(cors());
+app.use(express.static('public'));
 
-const publicPath = path.join(__dirname, 'public');
-const uploadDir = path.join(__dirname, 'uploads');
+const PROMPTPAY_ID = '0846690495'; // ใส่เบอร์พร้อมเพย์ของคุณที่นี่
+const API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd'; // API Key จากรูปของคุณ
 
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+// 1. Endpoint สำหรับสร้าง QR Code
+app.post('/generateQR', (req, res) => {
+    const amount = parseFloat(req.body.amount);
+    const payload = generatePayload(PROMPTPAY_ID, { amount });
+    
+    qrcode.toDataURL(payload, (err, url) => {
+        if (err) return res.status(500).json({ error: 'QR Generation failed' });
+        res.json({ qrImage: url });
+    });
+});
 
-const upload = multer({ dest: uploadDir });
-
-// 🔐 ใส่ API KEY ของคุณ
-const SLIPOK_API_KEY = 'f49d3255-e467-4fb9-8997-85fd436e78fd';
-
-// -------- API --------
+// 2. Endpoint สำหรับตรวจสอบสลิป
 app.post('/verify-slip', upload.single('slip'), async (req, res) => {
-    let filePath = "";
-
     try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: "ไม่พบไฟล์"
-            });
-        }
+        const formData = new FormData();
+        formData.append('file', req.file.buffer, { filename: 'slip.jpg' });
 
-        filePath = req.file.path;
-
-        const form = new FormData();
-        // ✅ ใช้ files (สำคัญมาก)
-        form.append('files', fs.createReadStream(filePath));
-
-        const response = await axios.post(
-            'https://api.slipok.com/api/v1/slip/verify',
-            form,
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'x-authorization': SLIPOK_API_KEY
-                },
-                timeout: 20000
+        // ตัวอย่างการเรียกใช้ API (ในที่นี้อ้างอิงโครงสร้าง EasySlip)
+        const response = await axios.post('https://developer.easyslip.com/api/v1/verify', formData, {
+            headers: {
+                ...formData.getHeaders(),
+                'Authorization': `Bearer ${API_KEY}`
             }
-        );
-
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        });
 
         res.json(response.data);
-
     } catch (error) {
-        console.error("ERROR:", error.response?.data || error.message);
-
-        if (filePath && fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
-
-        res.status(error.response?.status || 500).json({
-            success: false,
-            message: error.response?.data || error.message
-        });
+        res.status(500).json({ success: false, message: 'Verification failed' });
     }
 });
 
-// -------- STATIC --------
-app.use(express.static(publicPath));
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(publicPath, 'index.html'));
-});
-
-// -------- START --------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
