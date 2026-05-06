@@ -1,43 +1,116 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8">
-<title>Upload Slip</title>
+    <meta charset="UTF-8">
+    <title>ระบบรับชำระและแจ้งโอนเงิน</title>
+    <!-- เรียกใช้ Library สำหรับสร้าง QR Code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Tahoma', sans-serif; text-align: center; padding: 50px; background: #f4f7f6; }
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; width: 350px; }
+        input { margin: 10px 0; width: 80%; padding: 8px; }
+        button { padding: 10px 20px; background-color: #003d6b; color: white; border: none; cursor: pointer; border-radius: 5px; width: 80%; margin-top: 10px; }
+        #qrcode { margin: 20px auto; display: flex; justify-content: center; }
+        #status { margin-top: 20px; font-weight: bold; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+    </style>
 </head>
 <body>
 
-<h2>อัปโหลดสลิป</h2>
+<div class="card">
+    <h2>ชำระเงินผ่าน PromptPay</h2>
+    <div id="qrcode"></div>
+    <p style="font-size: 0.9em; color: #666;">สแกน QR เพื่อโอนเงิน</p>
 
-<input type="file" id="file">
-<br><br>
+    <hr>
 
-<button onclick="uploadSlip()">ตรวจสอบ</button>
+    <h3>แจ้งยืนยันการโอนเงิน</h3>
+    <p>กรุณาอัปโหลดสลิปเพื่อตรวจสอบยอด</p>
+    
+    <input type="file" id="slipInput" accept="image/*">
+    <button onclick="uploadAndVerify()">ยืนยันการโอน</button>
 
-<pre id="result"></pre>
+    <div id="status"></div>
+</div>
 
 <script>
-async function uploadSlip() {
-  const fileInput = document.getElementById("file");
-  const file = fileInput.files[0];
+    // --- 1. ส่วนการสร้าง QR Code PromptPay ---
+    
+    function generatePromptPayPayload(target, amount) {
+        let payload = "000201010211";
+        // ตรวจสอบว่าเป็นเบอร์โทร (10 หลัก) หรือ เลขบัตร/E-Wallet (13 หลัก)
+        const merchantInfo = "006601" + (target.length === 13 ? "02" : "01") + 
+                             target.length.toString().padStart(2, '0') + target;
+        payload += "29" + merchantInfo.length.toString().padStart(2, '0') + merchantInfo;
+        payload += "53037645802TH";
 
-  if (!file) {
-    alert("กรุณาเลือกไฟล์");
-    return;
-  }
+        if (amount && amount > 0) {
+            const amtStr = parseFloat(amount).toFixed(2);
+            payload += "54" + amtStr.length.toString().padStart(2, '0') + amtStr;
+        }
+        
+        payload += "6304";
+        return payload + crc16(payload);
+    }
 
-  const formData = new FormData();
-  formData.append("slip", file); // 🔥 ต้องชื่อ slip ตรงกับ server
+    function crc16(data) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < data.length; i++) {
+            let x = ((crc >> 8) ^ data.charCodeAt(i)) & 0xFF;
+            x ^= x >> 4;
+            crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF;
+        }
+        return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
 
-  const res = await fetch("https://qr-code-g7f3.onrender.com/verify-slip", {
-    method: "POST",
-    body: formData
-  });
+    // ตั้งค่าเริ่มต้น: ใส่เบอร์โทรศัพท์ของคุณและจำนวนเงิน (ถ้ามี)
+    const MY_PROMPTPAY_ID = "08XXXXXXXX"; // เปลี่ยนเป็นเบอร์ของคุณ
+    const AMOUNT = 0.00; // ใส่ 0 หากต้องการให้ผู้โอนกรอกยอดเอง
 
-  const data = await res.json();
+    const payload = generatePromptPayPayload(MY_PROMPTPAY_ID, AMOUNT);
+    new QRCode(document.getElementById("qrcode"), {
+        text: payload,
+        width: 200,
+        height: 200
+    });
 
-  document.getElementById("result").innerText =
-    JSON.stringify(data, null, 2);
-}
+    // --- 2. ส่วนการส่งสลิปไปตรวจสอบ ---
+
+    async function uploadAndVerify() {
+        const fileInput = document.getElementById('slipInput');
+        const statusDiv = document.getElementById('status');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert("กรุณาเลือกไฟล์สลิปก่อนครับ");
+            return;
+        }
+
+        statusDiv.innerText = "กำลังตรวจสอบ...";
+        const formData = new FormData();
+        formData.append('slip', file);
+
+        try {
+            const response = await fetch('/verify-slip', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                statusDiv.style.color = "green";
+                // แสดงข้อมูลจาก API SlipOK (ปรับตามโครงสร้าง JSON ของ API)
+                statusDiv.innerText = `ยืนยันสำเร็จ! ยอดเงิน: ${result.data.amount} บาท`;
+            } else {
+                statusDiv.style.color = "red";
+                statusDiv.innerText = `ตรวจสอบไม่สำเร็จ: ${result.message}`;
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            statusDiv.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+        }
+    }
 </script>
 
 </body>
