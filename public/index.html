@@ -1,20 +1,71 @@
-<input type="number" id="amount" placeholder="ระบุจำนวนเงิน">
-<button onclick="getQR()">สร้าง QR Code</button>
-<div id="qr-display"></div>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Code & Slip Verify</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        #qr-display img { width: 250px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <h2>ระบบชำระเงิน</h2>
+    <input type="number" id="amount" placeholder="ระบุจำนวนเงิน (บาท)">
+    <button onclick="getQR()">สร้าง QR Code</button>
+    <div id="qr-display"></div>
 
-<hr>
-<input type="file" id="slipInput">
-<button onclick="verify()">ยืนยันการโอน</button>
+    <hr>
+    <h3>ตรวจสอบสลิป</h3>
+    <input type="file" id="slipInput" accept="image/*">
+    <button onclick="verify()">ยืนยันการโอน</button>
+    <p id="result"></p>
 
-<script>
-async function getQR() {
-    const amount = document.getElementById('amount').value;
-    const res = await fetch('/generateQR', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ amount })
-    });
-    const data = await res.json();
-    document.getElementById('qr-display').innerHTML = `<img src="${data.qrImage}">`;
-}
-</script>
+    <script>
+        // ฟังก์ชันสร้าง QR
+        async function getQR() {
+            const amount = document.getElementById('amount').value;
+            const res = await fetch('/generateQR', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ amount })
+            });
+            const data = await res.json();
+            document.getElementById('qr-display').innerHTML = `<img src="${data.qrImage}">`;
+        }
+
+        // ฟังก์ชันตรวจสอบสลิป (แก้ ReferenceError)
+        async function verify() {
+            const fileInput = document.getElementById('slipInput');
+            const resultDisplay = document.getElementById('result');
+            
+            if (fileInput.files.length === 0) {
+                alert('กรุณาเลือกไฟล์ภาพสลิป');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('slip', fileInput.files[0]);
+
+            resultDisplay.innerText = "กำลังตรวจสอบ...";
+
+            try {
+                const res = await fetch('/verify-slip', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.success || data.data) {
+                    resultDisplay.style.color = "green";
+                    resultDisplay.innerText = "ตรวจสอบสำเร็จ! ยอดเงิน: " + (data.data.amount || "ถูกต้อง");
+                } else {
+                    resultDisplay.style.color = "red";
+                    resultDisplay.innerText = "สลิปไม่ถูกต้อง หรือมีการใช้ซ้ำ";
+                }
+            } catch (err) {
+                resultDisplay.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ";
+            }
+        }
+    </script>
+</body>
+</html>
